@@ -1,0 +1,6 @@
+{
+  "name": "Koordinatkonverterare",
+  "description": "Ett interaktivt verktyg för att identifiera svenska koordinatsystem genom att plotta testpunkter på kartan, scrolla bland projektioner och klicka på kartan för att hitta mest troliga koordinatsystem.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
