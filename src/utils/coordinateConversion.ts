@@ -50,7 +50,7 @@ export const COORDINATE_SYSTEMS: CoordinateSystem[] = [
     meridian: 15.0,
     scale: 0.9996,
     falseNorthing: 0.0,
-    falseEasting: 150000.0,
+    falseEasting: 500000.0,
     ellipsoid: "GRS80",
     description: "Sveriges nationella kartprojektion. Används för småskalig kartering."
   },
@@ -526,16 +526,16 @@ export function gridToGeodetic(
   
   // Solve geodetic latitude from conformal latitude using isometric iterations (highly convergent)
   const e = Math.sqrt(e2);
-  const t_star = Math.tan(phi_star);
-  let t = t_star;
+  const s_star = Math.tan(Math.PI / 4.0 + phi_star / 2.0);
+  let s = s_star;
   
   for (let i = 0; i < 6; i++) {
-    const sin_phi = t / Math.sqrt(1.0 + t * t);
+    const sin_phi = (s * s - 1.0) / (s * s + 1.0);
     const term = Math.pow((1.0 + e * sin_phi) / (1.0 - e * sin_phi), e / 2.0);
-    t = t_star * term;
+    s = s_star * term;
   }
   
-  const lat_rad = Math.atan(t);
+  const lat_rad = 2.0 * Math.atan(s) - Math.PI / 2.0;
   
   return {
     lat: (lat_rad * 180.0) / Math.PI,

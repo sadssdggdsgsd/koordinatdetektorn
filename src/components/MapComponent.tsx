@@ -11,6 +11,8 @@ export interface MapMarkerPoint {
   isInSweden: boolean;
   n: number;
   e: number;
+  projectedN?: number;
+  projectedE?: number;
 }
 
 interface MapComponentProps {
