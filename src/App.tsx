@@ -5,13 +5,16 @@ import {
   Check,
   X,
   MapPin,
-  Map
+  Map,
+  Globe
 } from "lucide-react";
 import { 
   COORDINATE_SYSTEMS, 
   CoordinateSystem, 
   convertCoordinatesBySystem, 
-  geodeticToGrid
+  geodeticToGrid,
+  degToDMS,
+  degToDM
 } from "./utils/coordinateConversion";
 import MapComponent, { MapMarkerPoint } from "./components/MapComponent";
 
@@ -57,17 +60,40 @@ export default function App() {
 
     const wgs84System = COORDINATE_SYSTEMS.find((s) => s.id === "wgs84")!;
 
+    // Find active grid system (excluding WGS84 itself) to decode grid coords to geodetic WGS84
+    let activeGridSys = COORDINATE_SYSTEMS.find((s) => s.id === highlightedSystemId && s.type !== "WGS84");
+    if (!activeGridSys) {
+      // Default to sweref99tm if the highlighted system is WGS84 or empty
+      activeGridSys = COORDINATE_SYSTEMS.find((s) => s.id === "sweref99tm") || COORDINATE_SYSTEMS.find((s) => s.type === "SWEREF");
+    }
+
     return COORDINATE_SYSTEMS.map((sys) => {
       if (sys.type === "WGS84") {
-        const isValid = Math.abs(n) <= 90 && Math.abs(e) <= 180;
+        const isInputGeodetic = Math.abs(n) <= 90 && Math.abs(e) <= 180;
+        let lat = NaN;
+        let lon = NaN;
+        
+        if (isInputGeodetic) {
+          lat = n;
+          lon = e;
+        } else if (activeGridSys) {
+          // Calculate geodetic lat/lon on WGS84 by decoding the grid coordinates with the selected active system
+          const result = convertCoordinatesBySystem(n, e, activeGridSys, wgs84System);
+          if (result.success) {
+            lat = result.n;
+            lon = result.e;
+          }
+        }
+
+        const valid = !isNaN(lat) && !isNaN(lon);
         return {
           systemId: sys.id,
           systemName: sys.name,
           epsg: sys.epsg,
           type: sys.type,
-          lat: isValid ? n : NaN,
-          lon: isValid ? e : NaN,
-          isInSweden: isValid ? isPointInSweden(n, e) : false,
+          lat: lat,
+          lon: lon,
+          isInSweden: valid ? isPointInSweden(lat, lon) : false,
           n: n,
           e: e,
         };
@@ -90,7 +116,7 @@ export default function App() {
         e: e,
       };
     }).filter((p) => !isNaN(p.lat) && !isNaN(p.lon));
-  }, [parsedCoords]);
+  }, [parsedCoords, highlightedSystemId]);
 
   // Map Click handler (finds target systems based on clicked position)
   const handleMapClick = (lat: number, lon: number) => {
@@ -211,11 +237,11 @@ export default function App() {
 
       {/* 2. MINIMAL INPUT CONSOLE */}
       <section className="bg-white border-b border-slate-100 px-6 py-4" id="coordinates-input-bar">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center gap-4">
+        <div className="max-w-[1600px] mx-auto flex flex-col sm:flex-row items-center gap-4">
           <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-2 gap-3">
             {/* Box 1 */}
             <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Y: Nord / Latitud</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Y: Nord (N) / Latitud (breddgrad)</span>
               <div className="relative">
                 <input
                   type="text"
@@ -228,7 +254,7 @@ export default function App() {
                 {inputVal1 && (
                   <button
                     onClick={() => setInputVal1("")}
-                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 animate-fade-in"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -238,7 +264,7 @@ export default function App() {
 
             {/* Box 2 */}
             <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">X: Öst / Longitud</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">X: Öst (E) / Longitud (längdgrad)</span>
               <div className="relative">
                 <input
                   type="text"
@@ -251,7 +277,7 @@ export default function App() {
                 {inputVal2 && (
                   <button
                     onClick={() => setInputVal2("")}
-                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 animate-fade-in"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -263,10 +289,10 @@ export default function App() {
       </section>
 
       {/* 3. CORE TWO-COLUMN SPLIT */}
-      <main className="flex-1 w-full max-w-7xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch" id="detector-workspace">
+      <main className="flex-1 w-full max-w-[1600px] mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch" id="detector-workspace">
         
-        {/* LEFT COLUMN: Deep Clean List */}
-        <section className="lg:col-span-5 flex flex-col gap-3 min-w-0" id="predictions-sidebar">
+        {/* LEFT COLUMN: Deep Clean List (Spans 4 columns for a broader map presence) */}
+        <section className="lg:col-span-4 flex flex-col gap-3 min-w-0" id="predictions-sidebar">
           <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-2xs flex flex-col gap-3.5 flex-1 min-h-0">
             
             {/* Search and Minimal Filter Checkbox */}
@@ -295,48 +321,77 @@ export default function App() {
             </div>
 
             {/* Flat high-density scrollable system rows */}
-            <div className="flex-1 overflow-y-auto max-h-[460px] lg:max-h-[520px] pr-1 flex flex-col gap-1.5" id="predictions-list">
+            <div className="flex-1 overflow-y-auto max-h-[460px] lg:max-h-[720px] pr-1 flex flex-col gap-1.5" id="predictions-list">
               {filteredPoints.length > 0 ? (
                 filteredPoints.map((pt) => {
                   const isHighlighted = pt.systemId === highlightedSystemId;
+                  const isWGS84 = pt.type === "WGS84";
                   
                   return (
                     <div
                       key={pt.systemId}
                       onClick={() => setHighlightedSystemId(pt.systemId)}
-                      className={`p-2.5 rounded-lg border text-left transition cursor-pointer flex items-center justify-between gap-3 ${
+                      className={`p-2.5 rounded-lg border text-left transition duration-150 cursor-pointer flex flex-col gap-2 ${
                         isHighlighted
-                          ? "bg-blue-50/50 border-blue-400"
-                          : "bg-slate-50/60 border-slate-200/50 hover:bg-slate-50"
+                          ? "bg-blue-50/50 border-blue-400 ring-1 ring-blue-100"
+                          : "bg-slate-50/60 border-slate-200/50 hover:bg-slate-100/70"
                       }`}
                       id={`system-row-${pt.systemId}`}
                     >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] font-bold text-slate-800 truncate">
-                            {pt.systemName}
-                          </span>
-                          <span className="text-[9px] text-slate-400 font-mono font-semibold">
-                            {pt.epsg}
-                          </span>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs font-bold text-slate-800">
+                              {pt.systemName}
+                            </span>
+                            <span className="text-[9px] text-slate-400 font-mono font-semibold">
+                              {pt.epsg}
+                            </span>
+                          </div>
+                          {/* Compact coordinate line */}
+                          <div className="text-[10px] font-mono text-slate-500 mt-0.5 flex gap-3">
+                            <span>Lat: {pt.lat.toFixed(5)}°</span>
+                            <span>Lon: {pt.lon.toFixed(5)}°</span>
+                          </div>
                         </div>
-                        {/* Compact coordinate line */}
-                        <div className="text-[10px] font-mono text-slate-500 mt-0.5 flex gap-3">
-                          <span>Lat: {pt.lat.toFixed(5)}°</span>
-                          <span>Lon: {pt.lon.toFixed(5)}°</span>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${
+                            pt.isInSweden 
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-100" 
+                              : "bg-slate-100 text-slate-400 border border-slate-200/40"
+                          }`}>
+                            {pt.isInSweden ? "Sverige" : "Hav/Utomlands"}
+                          </span>
+                          {isHighlighted && <Check className="w-3.5 h-3.5 text-blue-600" />}
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                          pt.isInSweden 
-                            ? "bg-emerald-50 text-emerald-700" 
-                            : "bg-slate-100 text-slate-400"
-                        }`}>
-                          {pt.isInSweden ? "Sverige" : "Hav/Utomlands"}
-                        </span>
-                        {isHighlighted && <Check className="w-3.5 h-3.5 text-blue-600" />}
-                      </div>
+                      {/* Explicit detailed card format display if it's WGS84 */}
+                      {isWGS84 && (
+                        <div className="text-[10px] bg-white p-2.5 rounded-lg border border-slate-100 flex flex-col gap-1.5 text-slate-600 font-sans mt-0.5 shadow-3xs animate-fade-in">
+                          <div className="flex justify-between items-center border-b border-slate-100 pb-1">
+                            <span className="text-[9px] text-slate-450 font-bold uppercase tracking-wider">Geodetiska format</span>
+                            <span className="text-[8.5px] bg-indigo-50 text-indigo-600 font-bold px-1 rounded flex items-center gap-0.5">
+                              <Globe className="w-2.5 h-2.5" /> GPS / WGS 84
+                            </span>
+                          </div>
+                          <div className="font-mono text-[9px] flex flex-col gap-1.5 leading-relaxed">
+                            <div>
+                              <span className="text-slate-400 font-sans font-medium text-[9.5px]">Decimal:</span>{" "}
+                              <span className="text-slate-800 font-semibold">{pt.lat.toFixed(6)}° N, {pt.lon.toFixed(6)}° E</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 font-sans font-medium text-[9.5px]">DM:</span>{" "}
+                              <span className="text-slate-800 font-semibold">{degToDM(pt.lat, true)}, {degToDM(pt.lon, false)}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 font-sans font-medium text-[9.5px]">DMS:</span>{" "}
+                              <span className="text-slate-800 font-semibold">{degToDMS(pt.lat, true)}, {degToDMS(pt.lon, false)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })
@@ -349,9 +404,9 @@ export default function App() {
           </div>
         </section>
 
-        {/* RIGHT COLUMN: Interactive map and minimal click utility row */}
-        <section className="lg:col-span-7 flex flex-col gap-3 min-w-0" id="map-and-analysis-area">
-          <div className="h-[360px] lg:h-[450px] w-full" id="map-holder">
+        {/* RIGHT COLUMN: Interactive map (Spans 8 columns of widescreen space for maximum presence) */}
+        <section className="lg:col-span-8 flex flex-col gap-3 min-w-0" id="map-and-analysis-area">
+          <div className="h-[400px] lg:h-[680px] w-full" id="map-holder">
             <MapComponent
               points={computedPoints}
               highlightedSystemId={highlightedSystemId}
@@ -362,7 +417,7 @@ export default function App() {
 
           {/* Clean, one-liner click analysis block */}
           {mapClickAnalysis ? (
-            <div className="bg-white p-3.5 rounded-xl border border-slate-100 shadow-2xs flex flex-col gap-2.5" id="click-analysis-report">
+            <div className="bg-white p-3.5 rounded-xl border border-slate-100 shadow-2xs flex flex-col gap-2.5 animate-fade-in" id="click-analysis-report">
               <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
                   <Map className="w-3.5 h-3.5 text-emerald-500" />
