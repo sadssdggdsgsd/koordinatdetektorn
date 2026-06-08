@@ -29,11 +29,11 @@ interface MapClickAnalysis {
 }
 
 export default function App() {
-  // Start with Stockholm Palace coordinates in SWEREF 99 18 00 as default
-  const [inputVal1, setInputVal1] = useState<string>("6580512"); // Northing / Latitud
-  const [inputVal2, setInputVal2] = useState<string>("149202");  // Easting / Longitud
+  // Start with default coordinates in SWEREF 99 17 15
+  const [inputVal1, setInputVal1] = useState<string>("6920594.283"); // Northing / Latitud
+  const [inputVal2, setInputVal2] = useState<string>("152152.249");  // Easting / Longitud
 
-  const [highlightedSystemId, setHighlightedSystemId] = useState<string | null>("sweref99_1800");
+  const [highlightedSystemId, setHighlightedSystemId] = useState<string | null>("sweref99_1715");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [onlySweden, setOnlySweden] = useState<boolean>(true);
   const [mapClickAnalysis, setMapClickAnalysis] = useState<MapClickAnalysis | null>(null);
