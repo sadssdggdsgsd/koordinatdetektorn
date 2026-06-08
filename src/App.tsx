@@ -355,11 +355,28 @@ export default function App() {
                               {pt.epsg}
                             </span>
                           </div>
-                          {/* Compact coordinate line */}
-                          <div className="text-[10px] font-mono text-slate-500 mt-0.5 flex gap-3">
-                            <span>Lat: {pt.lat.toFixed(5)}°</span>
-                            <span>Lon: {pt.lon.toFixed(5)}°</span>
-                          </div>
+                          {/* Custom coordinate display focusing on meters for projected grids and degrees on WGS84 */}
+                          {!isWGS84 ? (
+                            <div className="mt-1 font-mono">
+                              <div className="text-xs font-bold text-slate-800 flex flex-wrap gap-x-3 gap-y-0.5">
+                                <span>N: <span className="text-slate-950 font-semibold">{Math.round(pt.n).toLocaleString("sv-SE")}</span> m</span>
+                                <span>E: <span className="text-slate-950 font-semibold">{Math.round(pt.e).toLocaleString("sv-SE")}</span> m</span>
+                              </div>
+                              <div className="text-[10px] text-slate-400 font-medium mt-0.5">
+                                Lat: {pt.lat.toFixed(5)}° · Lon: {pt.lon.toFixed(5)}°
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mt-1 font-mono">
+                              <div className="text-xs font-bold text-slate-800 flex flex-wrap gap-x-3 gap-y-0.5">
+                                <span>Lat: <span className="text-slate-950 font-semibold">{pt.lat.toFixed(5)}°</span></span>
+                                <span>Lon: <span className="text-slate-950 font-semibold">{pt.lon.toFixed(5)}°</span></span>
+                              </div>
+                              <div className="text-[10px] text-slate-400 font-medium mt-0.5">
+                                Geodetiskt referenssystem (GPS/WGS84)
+                              </div>
+                            </div>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0">
@@ -409,24 +426,6 @@ export default function App() {
               )}
             </div>
 
-            {/* Sweref Scale Error Educational Card */}
-            <div className="bg-indigo-50/50 rounded-xl p-3 border border-indigo-100/80 flex flex-col gap-1.5 mt-2.5 text-[11px] text-slate-600 font-sans" id="scale-factor-warning">
-              <span className="font-bold text-indigo-700 font-sans tracking-wide uppercase text-[9px] flex items-center gap-1.5">
-                <Compass className="w-4 h-4 text-indigo-600 shrink-0" /> Vanlig fallgrop: 2.7 km fel i norr/söder?
-              </span>
-              <p className="leading-relaxed">
-                Om din punkt i t.ex. Sundsvall hamnar <strong>exact 2.768 meter (ca 2.8 km eller &quot;2 km&quot;) för långt söderut</strong> beror det på en skalkonflikt!
-              </p>
-              <p className="leading-relaxed">
-                Detta sker om du matar in en nätkoordinat född i det nationella <strong>SWEREF 99 TM</strong> (skalreduktion <code className="font-mono text-indigo-700 bg-indigo-100/60 px-0.5 rounded">0.9996</code>) men tolkar eller konverterar koordinaten som den lokala zonen <strong>SWEREF 99 17 15</strong> (skalreduktion <code className="font-mono text-indigo-700 bg-indigo-100/60 px-0.5 rounded">1.0</code>).
-              </p>
-              <p className="leading-relaxed">
-                Skalskillnaden på <code className="font-mono font-bold">0.0004</code> multiplicerat med Sveriges breddgrads-avstånd från ekvatorn (~6 920 000 meter i Sundsvall) resulterar i precis <strong>2 768 meters (2.77 km) nord-sydlig förskjutning</strong>!
-              </p>
-              <div className="text-[9.5px] text-indigo-850 font-bold mt-1 bg-white/75 rounded-lg px-2.5 py-1.5 border border-indigo-205/50">
-                💡 Lösning: Byt det valda inmatningssystemet i listan till <span className="underline">SWEREF 99 TM</span> eller <span className="underline">SWEREF 99 17 15</span> beroende på var koordinaten ursprungligen genererades.
-              </div>
-            </div>
           </div>
         </section>
 

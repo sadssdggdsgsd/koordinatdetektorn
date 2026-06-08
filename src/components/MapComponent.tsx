@@ -136,13 +136,15 @@ export default function MapComponent({
         [69.5, zone.maxLon]
       ];
 
+      const isSelected = zone.id === highlightedSystemId;
+
       const rect = L.rectangle(bounds, {
         color: zone.color,
-        weight: 1,
+        weight: isSelected ? 2.5 : 1,
         fillColor: zone.color,
-        fillOpacity: 0.08,
-        opacity: 0.3,
-        dashArray: "3, 3",
+        fillOpacity: isSelected ? 0.16 : 0.03,
+        opacity: isSelected ? 0.85 : 0.15,
+        dashArray: isSelected ? undefined : "2, 5", // solid line for active zone boundary, fine dotted for inactive
         interactive: true
       });
 
@@ -163,16 +165,16 @@ export default function MapComponent({
       rect.addTo(map);
       layers.push(rect);
 
-      // Central meridian dashed line
+      // Central meridian line
       const lineCoords: L.LatLngExpression[] = [
         [55.0, zone.centralMeridian],
         [69.0, zone.centralMeridian]
       ];
       const meridianLine = L.polyline(lineCoords, {
         color: zone.color,
-        weight: 1.5,
-        opacity: 0.5,
-        dashArray: "4, 6",
+        weight: isSelected ? 3.5 : 1.2,
+        opacity: isSelected ? 0.95 : 0.35,
+        dashArray: isSelected ? undefined : "6, 8", // solid central axis for highlighted meridian, long spaced dashes for unhighlighted
         interactive: false
       });
       meridianLine.addTo(map);
@@ -184,7 +186,7 @@ export default function MapComponent({
     return () => {
       layers.forEach((layer) => layer.remove());
     };
-  }, [showZones]);
+  }, [showZones, highlightedSystemId]);
 
   // Sync / render markers based on points list
   useEffect(() => {
@@ -258,16 +260,29 @@ export default function MapComponent({
           onMarkerClick(p.systemId);
         });
 
+      const isWGS84_marker = p.type === "WGS84";
+      const coordsHtml = isWGS84_marker
+        ? `
+          <div class="font-mono text-[11px] leading-relaxed">
+            <div class="font-bold text-slate-800">Lat: ${p.lat.toFixed(6)}°</div>
+            <div class="font-bold text-slate-800">Lon: ${p.lon.toFixed(6)}°</div>
+          </div>
+        `
+        : `
+          <div class="font-mono text-[11px] leading-relaxed">
+            <div class="font-bold text-slate-800">N: ${Math.round(p.n).toLocaleString("sv-SE")} m</div>
+            <div class="font-bold text-slate-800">E: ${Math.round(p.e).toLocaleString("sv-SE")} m</div>
+            <div class="text-[9px] text-slate-400 font-medium mt-1">Lat: ${p.lat.toFixed(5)}° · Lon: ${p.lon.toFixed(5)}°</div>
+          </div>
+        `;
+
       // Bind simple popup
       marker.bindPopup(`
         <div class="text-xs font-sans p-1">
           <div class="font-bold text-slate-900" style="color: ${markerColor}">${p.systemName}</div>
           <div class="text-slate-500 text-[10px] uppercase font-mono tracking-wider mt-0.5">${p.epsg}</div>
           <div class="w-full h-px bg-slate-100 my-1.5"></div>
-          <div class="grid grid-cols-2 gap-2 text-[10px] font-mono">
-            <div><span class="text-slate-400">Lat:</span> ${p.lat.toFixed(5)}°</div>
-            <div><span class="text-slate-400">Lon:</span> ${p.lon.toFixed(5)}°</div>
-          </div>
+          ${coordsHtml}
           <div class="text-[9px] ${p.isInSweden ? "text-emerald-600 bg-emerald-50" : "text-amber-600 bg-amber-50"} font-semibold rounded px-1.5 py-0.5 mt-1.5 text-center">
             ${p.isInSweden ? "Träffar Sverige 🇸🇪" : "Utanför Sverige 🌊"}
           </div>
