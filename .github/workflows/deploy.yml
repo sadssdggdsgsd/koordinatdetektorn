@@ -1,0 +1,52 @@
+# Enkel GitHub Actions-workflow för att bygga och lansera till GitHub Pages
+name: Bygg och lansera till GitHub Pages
+
+on:
+  push:
+    branches: ["main", "master"]
+  workflow_dispatch:
+
+# Sätter rättigheter för GITHUB_TOKEN för att tillåta lansering till GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Tillåt endast en körning i taget
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hämta kod (Checkout)
+        uses: actions/checkout@v4
+
+      - name: Installera Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Installera paket
+        run: npm ci || npm install
+
+      - name: Bygg applikationen (Vite)
+        run: npm run build
+
+      - name: Konfigurera Pages
+        uses: actions/configure-pages@v4
+
+      - name: Ladda upp byggda filer (dist)
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './dist'
+
+      - name: Lansera till GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
