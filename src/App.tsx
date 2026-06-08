@@ -321,7 +321,7 @@ export default function App() {
             </div>
 
             {/* Flat high-density scrollable system rows */}
-            <div className="flex-1 overflow-y-auto max-h-[460px] lg:max-h-[720px] pr-1 flex flex-col gap-1.5" id="predictions-list">
+            <div className="flex-1 overflow-y-auto max-h-[810px] lg:max-h-[1315px] pr-1 flex flex-col gap-1.5" id="predictions-list">
               {filteredPoints.length > 0 ? (
                 filteredPoints.map((pt) => {
                   const isHighlighted = pt.systemId === highlightedSystemId;
@@ -431,7 +431,7 @@ export default function App() {
 
         {/* RIGHT COLUMN: Interactive map (Spans 8 columns of widescreen space for maximum presence) */}
         <section className="lg:col-span-8 flex flex-col gap-3 min-w-0" id="map-and-analysis-area">
-          <div className="h-[400px] lg:h-[680px] w-full" id="map-holder">
+          <div className="h-[750px] lg:h-[1275px] w-full" id="map-holder">
             <MapComponent
               points={computedPoints}
               highlightedSystemId={highlightedSystemId}

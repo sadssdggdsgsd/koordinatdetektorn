@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
+import { X } from "lucide-react";
+import { COORDINATE_SYSTEMS, CoordinateSystem } from "../utils/coordinateConversion";
 
 export interface MapMarkerPoint {
   systemId: string;
@@ -80,6 +82,14 @@ export default function MapComponent({
   const zoneLayersRef = useRef<L.Layer[]>([]);
 
   const [showZones, setShowZones] = useState(true);
+  const [showInfoBox, setShowInfoBox] = useState(true);
+
+  // Auto-show info box when a projection point is highlighted
+  useEffect(() => {
+    if (highlightedSystemId) {
+      setShowInfoBox(true);
+    }
+  }, [highlightedSystemId]);
 
   // Initialize Map
   useEffect(() => {
@@ -140,11 +150,11 @@ export default function MapComponent({
 
       const rect = L.rectangle(bounds, {
         color: zone.color,
-        weight: isSelected ? 2.5 : 1,
+        weight: isSelected ? 1.5 : 1,
         fillColor: zone.color,
-        fillOpacity: isSelected ? 0.16 : 0.03,
-        opacity: isSelected ? 0.85 : 0.15,
-        dashArray: isSelected ? undefined : "2, 5", // solid line for active zone boundary, fine dotted for inactive
+        fillOpacity: isSelected ? 0.06 : 0.03,
+        opacity: isSelected ? 0.45 : 0.15,
+        dashArray: isSelected ? "4, 4" : "2, 5", // slightly more visible dashes for active zone, very fine dotted for inactive
         interactive: true
       });
 
@@ -172,9 +182,9 @@ export default function MapComponent({
       ];
       const meridianLine = L.polyline(lineCoords, {
         color: zone.color,
-        weight: isSelected ? 3.5 : 1.2,
-        opacity: isSelected ? 0.95 : 0.35,
-        dashArray: isSelected ? undefined : "6, 8", // solid central axis for highlighted meridian, long spaced dashes for unhighlighted
+        weight: isSelected ? 1.8 : 1.2,
+        opacity: isSelected ? 0.5 : 0.35,
+        dashArray: isSelected ? "8, 4" : "6, 8", // toned down dashes for active/selected meridian
         interactive: false
       });
       meridianLine.addTo(map);
@@ -214,80 +224,35 @@ export default function MapComponent({
     // Create markers
     validPoints.forEach((p) => {
       const isHighlighted = p.systemId === highlightedSystemId;
+      if (isHighlighted) {
+        // Skip drawing the marker for the selected/highlighted projection
+        return;
+      }
       const markerColor = getSystemColor(p.systemId);
 
-      let customIcon;
-      if (isHighlighted) {
-        customIcon = L.divIcon({
-          html: `
-            <div class="relative flex flex-col items-center justify-center -translate-y-4">
-              <div class="absolute -top-11 bg-slate-900/95 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-1 rounded shadow-md border border-slate-700 whitespace-nowrap z-[1200] flex items-center gap-1">
-                <span class="w-2 h-2 rounded-full overflow-hidden" style="background-color: ${markerColor}"></span>
-                <span>${p.systemName}</span>
-              </div>
-              <span class="absolute inline-flex h-10 w-10 rounded-full opacity-60 animate-ping" style="background-color: ${markerColor}"></span>
-              <span class="relative inline-flex rounded-full h-6.5 w-6.5 border-2 border-white shadow-lg flex items-center justify-center" style="background-color: ${markerColor}">
-                <span class="h-2 w-2 rounded-full bg-white"></span>
-              </span>
+      const customIcon = L.divIcon({
+        html: `
+          <div class="relative flex flex-col items-center justify-center group cursor-pointer">
+            <!-- Inline mini hover tooltip -->
+            <div class="absolute bottom-5 scale-0 group-hover:scale-100 bg-white/90 backdrop-blur-[2px] text-[10px] font-bold px-1.5 py-0.5 rounded shadow-xs border whitespace-nowrap z-[1100] transition-all duration-100 flex items-center gap-1"
+                 style="border-color: ${markerColor}30; color: ${markerColor};">
+              <span>${p.systemName} <span class="opacity-75 font-mono text-[8px]">(${p.epsg})</span></span>
             </div>
-          `,
-          className: "custom-pin",
-          iconSize: [40, 40],
-          iconAnchor: [20, 20],
-        });
-      } else {
-        customIcon = L.divIcon({
-          html: `
-            <div class="relative flex flex-col items-center justify-center group cursor-pointer">
-              <!-- Inline mini hover tooltip -->
-              <div class="absolute -top-7 scale-0 group-hover:scale-100 bg-slate-800 text-white text-[9px] px-1.5 py-0.5 rounded shadow-xs border border-slate-700 whitespace-nowrap z-[1100] transition-transform duration-100 flex items-center gap-1">
-                <span>${p.systemName}</span>
-              </div>
-              <span class="relative inline-flex rounded-full h-4 w-4 bg-opacity-90 border-2 border-white shadow-xs flex items-center justify-center transition-transform hover:scale-130 duration-100" style="background-color: ${markerColor}">
-                <span class="h-1 w-1 rounded-full bg-white/70"></span>
-              </span>
-            </div>
-          `,
-          className: "custom-pin-small",
-          iconSize: [18, 18],
-          iconAnchor: [9, 9],
-        });
-      }
+            <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-opacity-90 border-2 border-white shadow-xs flex items-center justify-center transition-transform hover:scale-120 duration-100" style="background-color: ${markerColor}">
+              <span class="h-1 w-1 rounded-full bg-white/70"></span>
+            </span>
+          </div>
+        `,
+        className: "custom-pin-small",
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
+      });
 
       const marker = L.marker([p.lat, p.lon], { icon: customIcon })
         .addTo(map)
         .on("click", () => {
           onMarkerClick(p.systemId);
         });
-
-      const isWGS84_marker = p.type === "WGS84";
-      const coordsHtml = isWGS84_marker
-        ? `
-          <div class="font-mono text-[11px] leading-relaxed">
-            <div class="font-bold text-slate-800">Lat: ${p.lat.toFixed(6)}°</div>
-            <div class="font-bold text-slate-800">Lon: ${p.lon.toFixed(6)}°</div>
-          </div>
-        `
-        : `
-          <div class="font-mono text-[11px] leading-relaxed">
-            <div class="font-bold text-slate-800">N: ${Math.round(p.n).toLocaleString("sv-SE")} m</div>
-            <div class="font-bold text-slate-800">E: ${Math.round(p.e).toLocaleString("sv-SE")} m</div>
-            <div class="text-[9px] text-slate-400 font-medium mt-1">Lat: ${p.lat.toFixed(5)}° · Lon: ${p.lon.toFixed(5)}°</div>
-          </div>
-        `;
-
-      // Bind simple popup
-      marker.bindPopup(`
-        <div class="text-xs font-sans p-1">
-          <div class="font-bold text-slate-900" style="color: ${markerColor}">${p.systemName}</div>
-          <div class="text-slate-500 text-[10px] uppercase font-mono tracking-wider mt-0.5">${p.epsg}</div>
-          <div class="w-full h-px bg-slate-100 my-1.5"></div>
-          ${coordsHtml}
-          <div class="text-[9px] ${p.isInSweden ? "text-emerald-600 bg-emerald-50" : "text-amber-600 bg-amber-50"} font-semibold rounded px-1.5 py-0.5 mt-1.5 text-center">
-            ${p.isInSweden ? "Träffar Sverige 🇸🇪" : "Utanför Sverige 🌊"}
-          </div>
-        </div>
-      `, { closeButton: false });
 
       markersRef.current[p.systemId] = marker;
     });
@@ -300,19 +265,17 @@ export default function MapComponent({
       // Pad bounds slightly
       map.fitBounds(bounds.pad(0.12), { animate: true, duration: 0.8, maxZoom: 14 });
     }
-  }, [points]);
+  }, [points, highlightedSystemId]);
 
-  // Handle programmatic highlighting / open popup when highlighted ID changes
+  // Handle programmatic highlighting / pan to coordinate when highlighted ID changes
   useEffect(() => {
-    const marker = highlightedSystemId ? markersRef.current[highlightedSystemId] : null;
+    const point = points.find((p) => p.systemId === highlightedSystemId);
     const map = mapInstanceRef.current;
-    if (marker && map) {
-      marker.openPopup();
-      // Smooth travel to marker but don't disrupt zoom too much
-      const latlng = marker.getLatLng();
+    if (point && map) {
+      const latlng = L.latLng(point.lat, point.lon);
       map.panTo(latlng, { animate: true, duration: 0.5 });
     }
-  }, [highlightedSystemId]);
+  }, [highlightedSystemId, points]);
 
   // Preset quick navigation to Sweden regions
   const zoomToArea = (area: "SVERIGE" | "STHLM" | "GBG" | "MALMO" | "UMEA") => {
@@ -347,50 +310,14 @@ export default function MapComponent({
     mapInstanceRef.current.setView(targetCoords, zoomLevel, { animate: true });
   };
 
+  const highlightedPoint = points.find((p) => p.systemId === highlightedSystemId);
+  const highlightedSystemDetails = COORDINATE_SYSTEMS.find((s) => s.id === highlightedSystemId);
+
   return (
     <div className="relative w-full h-full rounded-2xl overflow-hidden border border-slate-200/60 shadow-xs flex flex-col" id="map-parent">
       {/* Top Map Shortcuts Bar */}
       <div className="absolute top-3 left-3 z-[1000] flex flex-wrap gap-1.5 max-w-[calc(100%-60px)]">
         <div className="bg-white/95 backdrop-blur-md p-1.5 rounded-xl shadow-md border border-slate-100 flex items-center gap-1.5 text-xs font-sans hover:border-slate-200 transition-all duration-150">
-          <span className="px-1.5 font-semibold text-slate-500">Genvägar:</span>
-          <button
-            onClick={() => zoomToArea("SVERIGE")}
-            className="px-2 py-1 rounded-lg hover:bg-slate-100 active:bg-slate-200 transition text-slate-700 font-medium cursor-pointer"
-            id="map-btn-sverige"
-          >
-            Sverige
-          </button>
-          <button
-            onClick={() => zoomToArea("STHLM")}
-            className="px-2 py-1 rounded-lg hover:bg-slate-100 active:bg-slate-200 transition text-slate-700 font-medium cursor-pointer"
-            id="map-btn-sthlm"
-          >
-            Sthlm
-          </button>
-          <button
-            onClick={() => zoomToArea("GBG")}
-            className="px-2 py-1 rounded-lg hover:bg-slate-100 active:bg-slate-200 transition text-slate-700 font-medium cursor-pointer"
-            id="map-btn-gbg"
-          >
-            Gbg
-          </button>
-          <button
-            onClick={() => zoomToArea("MALMO")}
-            className="px-2 py-1 rounded-lg hover:bg-slate-100 active:bg-slate-200 transition text-slate-700 font-medium cursor-pointer"
-            id="map-btn-malmo"
-          >
-            Malmö
-          </button>
-          <button
-            onClick={() => zoomToArea("UMEA")}
-            className="px-2 py-1 rounded-lg hover:bg-slate-100 active:bg-slate-200 transition text-slate-700 font-medium cursor-pointer"
-            id="map-btn-umea"
-          >
-            Umeå
-          </button>
-
-          <div className="h-4 w-px bg-slate-200 mx-1"></div>
-
           {/* SWEREF local zones toggler button */}
           <button
             onClick={() => setShowZones(!showZones)}
@@ -403,6 +330,25 @@ export default function MapComponent({
             <span className={`w-1.5 h-1.5 rounded-full ${showZones ? "bg-indigo-600 animate-pulse" : "bg-slate-400"}`}></span>
             Visa SWEREF-zoner
           </button>
+
+          {/* Info card toggler button */}
+          {highlightedPoint && (
+            <>
+              <div className="h-4 w-px bg-slate-200 mx-1"></div>
+              <button
+                onClick={() => setShowInfoBox(!showInfoBox)}
+                className={`px-2 py-1 rounded-lg transition font-semibold text-[11px] flex items-center gap-1.5 active:scale-95 duration-100 cursor-pointer ${
+                  showInfoBox
+                    ? "bg-blue-50 text-blue-600 border border-blue-200/50"
+                    : "hover:bg-slate-100 text-slate-600 border border-transparent"
+                }`}
+                id="map-btn-toggle-infobox"
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${showInfoBox ? "bg-blue-600 animate-pulse" : "bg-slate-400"}`}></span>
+                {showInfoBox ? "Dölj inforuta" : "Visa inforuta"}
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -414,6 +360,107 @@ export default function MapComponent({
         <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
         <span>Tips: Klicka på zonerna eller kartan för att se koordinater</span>
       </div>
+
+      {/* Floating Detailed Point Information card */}
+      {showInfoBox && highlightedPoint && (
+        <div 
+          className="absolute bottom-3 right-3 z-[1000] bg-white/95 backdrop-blur-md p-4 rounded-xl shadow-xl border border-slate-200 w-80 flex flex-col gap-2.5 animate-fade-in"
+          id="highlighted-point-infobox"
+        >
+          <div className="flex items-start justify-between border-b border-slate-100 pb-2">
+            <div>
+              <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                <span 
+                  className="w-2.5 h-2.5 rounded-full inline-block border border-white shadow-xs" 
+                  style={{ backgroundColor: getSystemColor(highlightedPoint.systemId) }} 
+                />
+                {highlightedPoint.systemName}
+              </div>
+              <div className="text-[9px] text-slate-400 font-mono font-semibold uppercase tracking-wider mt-0.5">
+                {highlightedPoint.epsg}
+              </div>
+            </div>
+            <button
+              onClick={() => setShowInfoBox(false)}
+              className="text-slate-400 hover:text-slate-650 p-1 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+              title="Dölj"
+              id="close-infobox-btn"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="flex flex-col gap-2 text-[11px] font-sans text-slate-600">
+            <div className="grid grid-cols-2 gap-1.5 bg-slate-50 p-2 rounded-lg border border-slate-200/40 font-mono">
+              <div>
+                <span className="text-[9px] text-slate-400 font-sans block font-semibold">N (Northing)</span>
+                <span className="text-xs font-bold text-slate-900">
+                  {highlightedPoint.type === "WGS84" 
+                    ? `${highlightedPoint.lat.toFixed(6)}°` 
+                    : `${Math.round(highlightedPoint.n).toLocaleString("sv-SE")} m`}
+                </span>
+              </div>
+              <div>
+                <span className="text-[9px] text-slate-400 font-sans block font-semibold">E (Easting)</span>
+                <span className="text-xs font-bold text-slate-900">
+                  {highlightedPoint.type === "WGS84" 
+                    ? `${highlightedPoint.lon.toFixed(6)}°` 
+                    : `${Math.round(highlightedPoint.e).toLocaleString("sv-SE")} m`}
+                </span>
+              </div>
+            </div>
+
+            {highlightedPoint.type !== "WGS84" && (
+              <div className="text-[10px] text-slate-500 font-sans leading-relaxed border-b border-slate-100 pb-2">
+                <span className="font-bold text-slate-450 uppercase text-[8px] tracking-wide block mb-1">Motsvarande WGS 84 (GPS)</span>
+                <span className="font-mono text-slate-850 font-semibold">
+                  Lat: {highlightedPoint.lat.toFixed(6)}° N<br />
+                  Lon: {highlightedPoint.lon.toFixed(6)}° E
+                </span>
+              </div>
+            )}
+
+            {/* Projection Parameters */}
+            {highlightedSystemDetails && (
+              <div className="text-[10px] space-y-1">
+                <span className="font-bold text-slate-450 uppercase text-[8px] tracking-wide block mb-1">Projektionsparametrar (Konform)</span>
+                {highlightedSystemDetails.meridian !== undefined && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Centralmeridian:</span>
+                    <span className="font-mono text-slate-700 font-semibold">{highlightedSystemDetails.meridian}° Ö</span>
+                  </div>
+                )}
+                {highlightedSystemDetails.scale !== undefined && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Skalreduktion k₀:</span>
+                    <span className="font-mono text-slate-700 font-semibold">{highlightedSystemDetails.scale}</span>
+                  </div>
+                )}
+                {highlightedSystemDetails.falseNorthing !== undefined && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">False Northing N₀:</span>
+                    <span className="font-mono text-slate-700 font-semibold">{highlightedSystemDetails.falseNorthing.toLocaleString("sv-SE")} m</span>
+                  </div>
+                )}
+                {highlightedSystemDetails.falseEasting !== undefined && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">False Easting E₀:</span>
+                    <span className="font-mono text-slate-700 font-semibold">{highlightedSystemDetails.falseEasting.toLocaleString("sv-SE")} m</span>
+                  </div>
+                )}
+                <div className="flex justify-between border-t border-slate-150 pt-1 mt-1">
+                  <span className="text-slate-400">Referensellipsoid:</span>
+                  <span className="font-mono text-slate-705 uppercase font-semibold">{highlightedSystemDetails.ellipsoid}</span>
+                </div>
+                
+                <p className="text-[9px] text-slate-400 mt-2 leading-relaxed bg-slate-50/50 p-1.5 rounded border border-slate-100 font-medium">
+                  {highlightedSystemDetails.description}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
