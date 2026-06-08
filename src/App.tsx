@@ -16,7 +16,7 @@ import {
   degToDMS,
   degToDM
 } from "./utils/coordinateConversion";
-import MapComponent, { MapMarkerPoint } from "./components/MapComponent";
+import MapComponent, { MapMarkerPoint, getSystemColor } from "./components/MapComponent";
 
 interface MapClickAnalysis {
   lat: number;
@@ -326,6 +326,7 @@ export default function App() {
                 filteredPoints.map((pt) => {
                   const isHighlighted = pt.systemId === highlightedSystemId;
                   const isWGS84 = pt.type === "WGS84";
+                  const color = getSystemColor(pt.systemId);
                   
                   return (
                     <div
@@ -333,14 +334,20 @@ export default function App() {
                       onClick={() => setHighlightedSystemId(pt.systemId)}
                       className={`p-2.5 rounded-lg border text-left transition duration-150 cursor-pointer flex flex-col gap-2 ${
                         isHighlighted
-                          ? "bg-blue-50/50 border-blue-400 ring-1 ring-blue-100"
-                          : "bg-slate-50/60 border-slate-200/50 hover:bg-slate-100/70"
+                          ? "bg-slate-50/80"
+                          : "bg-slate-50/40 border-slate-200/50 hover:bg-slate-100/70"
                       }`}
+                      style={isHighlighted ? { borderColor: color, boxShadow: `0 0 0 1px ${color}` } : {}}
                       id={`system-row-${pt.systemId}`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5 flex-wrap">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span 
+                              className="w-2.5 h-2.5 rounded-full shrink-0 border border-white shadow-xs inline-block mb-0.5"
+                              style={{ backgroundColor: color }}
+                              title="Zonfärg på kartan"
+                            />
                             <span className="text-xs font-bold text-slate-800">
                               {pt.systemName}
                             </span>
