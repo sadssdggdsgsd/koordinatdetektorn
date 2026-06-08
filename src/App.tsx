@@ -291,8 +291,8 @@ export default function App() {
       {/* 3. CORE TWO-COLUMN SPLIT */}
       <main className="flex-1 w-full max-w-[1600px] mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch" id="detector-workspace">
         
-        {/* LEFT COLUMN: Deep Clean List (Spans 4 columns for a broader map presence) */}
-        <section className="lg:col-span-4 flex flex-col gap-3 min-w-0" id="predictions-sidebar">
+        {/* LEFT COLUMN: Deep Clean List (Spans 3 columns for a broader map presence) */}
+        <section className="lg:col-span-3 flex flex-col gap-3 min-w-0" id="predictions-sidebar">
           <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-2xs flex flex-col gap-3.5 flex-1 min-h-0">
             
             {/* Search and Minimal Filter Checkbox */}
@@ -321,7 +321,7 @@ export default function App() {
             </div>
 
             {/* Flat high-density scrollable system rows */}
-            <div className="flex-1 overflow-y-auto max-h-[810px] lg:max-h-[1315px] pr-1 flex flex-col gap-1.5" id="predictions-list">
+            <div className="flex-1 overflow-y-auto max-h-[560px] lg:max-h-[640px] pr-1 flex flex-col gap-1.5" id="predictions-list">
               {filteredPoints.length > 0 ? (
                 filteredPoints.map((pt) => {
                   const isHighlighted = pt.systemId === highlightedSystemId;
@@ -429,9 +429,9 @@ export default function App() {
           </div>
         </section>
 
-        {/* RIGHT COLUMN: Interactive map (Spans 8 columns of widescreen space for maximum presence) */}
-        <section className="lg:col-span-8 flex flex-col gap-3 min-w-0" id="map-and-analysis-area">
-          <div className="h-[750px] lg:h-[1275px] w-full" id="map-holder">
+        {/* RIGHT COLUMN: Interactive map (Spans 9 columns of widescreen space for maximum presence) */}
+        <section className="lg:col-span-9 flex flex-col gap-3 min-w-0" id="map-and-analysis-area">
+          <div className="h-[500px] lg:h-[800px] w-full" id="map-holder">
             <MapComponent
               points={computedPoints}
               highlightedSystemId={highlightedSystemId}
