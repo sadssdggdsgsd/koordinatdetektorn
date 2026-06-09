@@ -1,7 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import L from "leaflet";
 import { X } from "lucide-react";
 import { COORDINATE_SYSTEMS, CoordinateSystem } from "../utils/coordinateConversion";
+import { MUNICIPALITIES } from "../utils/municipalitiesData";
+
+// @ts-ignore
+import swedishMunicipalitiesRaw from "./assets/swedish_municipalities.geojson?raw";
 
 export interface MapMarkerPoint {
   systemId: string;
@@ -22,6 +26,8 @@ interface MapComponentProps {
   highlightedSystemId: string | null;
   onMapClick: (lat: number, lon: number) => void;
   onMarkerClick: (systemId: string) => void;
+  onMunicipalityClick?: (name: string) => void;
+  selectedMunicipalityName?: string | null;
 }
 
 export interface SwerefZone {
@@ -70,19 +76,53 @@ export const getSystemColor = (systemId: string): string => {
   }
 };
 
+export const getFeatureMuniName = (feature: any): string => {
+  if (!feature || !feature.properties) return "";
+  return feature.properties.knnamn || 
+         feature.properties.name || 
+         feature.properties.kommunnamn || 
+         feature.properties.KOMMUNNAMN || 
+         feature.properties.municipality || 
+         "";
+};
+
+export const findLocalMunicipality = (geojsonName: string) => {
+  if (!geojsonName) return null;
+  const cleanGeoName = geojsonName.toLowerCase().trim().replace(/\s+kommun$/, "");
+  return MUNICIPALITIES.find((m) => {
+    const cleanLocalName = m.name.toLowerCase().trim().replace(/\s+kommun$/, "");
+    return cleanLocalName === cleanGeoName || cleanLocalName.startsWith(cleanGeoName) || cleanGeoName.startsWith(cleanLocalName);
+  });
+};
+
 export default function MapComponent({
   points,
   highlightedSystemId,
   onMapClick,
   onMarkerClick,
+  onMunicipalityClick,
+  selectedMunicipalityName,
 }: MapComponentProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersRef = useRef<{ [key: string]: L.Marker }>({});
   const zoneLayersRef = useRef<L.Layer[]>([]);
+  const muniLayersRef = useRef<L.Layer[]>([]);
 
   const [showZones, setShowZones] = useState(true);
+  const [showMunicipalities, setShowMunicipalities] = useState(true);
   const [showInfoBox, setShowInfoBox] = useState(true);
+
+  const muniGeoJson = useMemo(() => {
+    try {
+      if (!swedishMunicipalitiesRaw) return null;
+      return JSON.parse(swedishMunicipalitiesRaw);
+    } catch (err) {
+      console.error("Failed to parse local Sweden municipalities GeoJSON", err);
+      return null;
+    }
+  }, []);
+  const geoJsonGroupRef = useRef<L.GeoJSON | null>(null);
 
   // Auto-show info box when a projection point is highlighted
   useEffect(() => {
@@ -126,77 +166,15 @@ export default function MapComponent({
     };
   }, []);
 
-  // Sync / render SWEREF zone stripes
+  // Sync / render SWEREF zone stripes (we now skip drawing projection boundaries and meridian lines)
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
 
-    // Remove existing zone layers
+    // Remove existing zone layers if any
     zoneLayersRef.current.forEach((layer) => layer.remove());
     zoneLayersRef.current = [];
-
-    if (!showZones) return;
-
-    const layers: L.Layer[] = [];
-
-    SWEREF_ZONES.forEach((zone) => {
-      // Create rectangle boundaries from latitude 55.0 to 69.5
-      const bounds: L.LatLngBoundsExpression = [
-        [55.0, zone.minLon],
-        [69.5, zone.maxLon]
-      ];
-
-      const isSelected = zone.id === highlightedSystemId;
-
-      const rect = L.rectangle(bounds, {
-        color: zone.color,
-        weight: isSelected ? 1.5 : 1,
-        fillColor: zone.color,
-        fillOpacity: isSelected ? 0.06 : 0.03,
-        opacity: isSelected ? 0.45 : 0.15,
-        dashArray: isSelected ? "4, 4" : "2, 5", // slightly more visible dashes for active zone, very fine dotted for inactive
-        interactive: true
-      });
-
-      rect.bindTooltip(`
-        <div class="font-sans p-1 text-slate-900">
-          <div class="font-bold text-xs" style="color: ${zone.color}">${zone.name}</div>
-          <div class="text-[9px] text-slate-500 font-mono mt-0.5">Centralmeridian: ${zone.centralMeridian}° Ö</div>
-          <div class="text-[9px] text-slate-400 font-mono">Längdgrader: ${zone.minLon}° - ${zone.maxLon}° Ö</div>
-          <div class="text-[9px] text-blue-600 font-bold mt-1">Klicka för att välja projiceringssystem</div>
-        </div>
-      `, { sticky: true, opacity: 0.98 });
-
-      rect.on("click", (e) => {
-        onMarkerClick(zone.id);
-        L.DomEvent.stopPropagation(e);
-      });
-
-      rect.addTo(map);
-      layers.push(rect);
-
-      // Central meridian line
-      const lineCoords: L.LatLngExpression[] = [
-        [55.0, zone.centralMeridian],
-        [69.0, zone.centralMeridian]
-      ];
-      const meridianLine = L.polyline(lineCoords, {
-        color: zone.color,
-        weight: isSelected ? 1.8 : 1.2,
-        opacity: isSelected ? 0.5 : 0.35,
-        dashArray: isSelected ? "8, 4" : "6, 8", // toned down dashes for active/selected meridian
-        interactive: false
-      });
-      meridianLine.addTo(map);
-      layers.push(meridianLine);
-    });
-
-    zoneLayersRef.current = layers;
-
-    return () => {
-      layers.forEach((layer) => layer.remove());
-    };
-  }, [showZones, highlightedSystemId]);
+  }, [highlightedSystemId]);
 
   // Sync / render markers based on points list
   useEffect(() => {
@@ -221,31 +199,59 @@ export default function MapComponent({
     // If no points land in Sweden, check any valid points
     const pointsToFit = swedenPoints.length > 0 ? swedenPoints : validPoints;
 
-    // Create markers
+    // Create markers for all systems (with conditional opacity and styling)
     validPoints.forEach((p) => {
       const isHighlighted = p.systemId === highlightedSystemId;
-      if (isHighlighted) {
-        // Skip drawing the marker for the selected/highlighted projection
-        return;
-      }
       const markerColor = getSystemColor(p.systemId);
+
+      const hasHighlight = highlightedSystemId !== null;
+      
+      let sizeClass = "h-3.5 w-3.5";
+      let pingEffect = "";
+      let opacityStyle = "opacity: 0.95;";
+      let zIndexStyle = "z-index: 1000;";
+
+      if (hasHighlight) {
+        if (isHighlighted) {
+          sizeClass = "h-5 w-5 scale-110";
+          pingEffect = `
+            <span class="absolute inline-flex h-full w-full rounded-full animate-ping opacity-60" style="background-color: ${markerColor}"></span>
+          `;
+          opacityStyle = "opacity: 1.0; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.15));";
+          zIndexStyle = "z-index: 1500; font-weight: 800;";
+        } else {
+          sizeClass = "h-2.5 w-2.5 opacity-60";
+          opacityStyle = "opacity: 0.28;"; // Make points not matching marked system much weaker
+          zIndexStyle = "z-index: 500;";
+        }
+      } else {
+        // Normal state when no projection is explicitly highlighted
+        sizeClass = "h-3.5 w-3.5";
+        opacityStyle = "opacity: 0.85;";
+        zIndexStyle = "z-index: 1000;";
+      }
 
       const customIcon = L.divIcon({
         html: `
-          <div class="relative flex flex-col items-center justify-center group cursor-pointer">
+          <div class="relative flex flex-col items-center justify-center group cursor-pointer" style="${opacityStyle} ${zIndexStyle}">
             <!-- Inline mini hover tooltip -->
-            <div class="absolute bottom-5 scale-0 group-hover:scale-100 bg-white/90 backdrop-blur-[2px] text-[10px] font-bold px-1.5 py-0.5 rounded shadow-xs border whitespace-nowrap z-[1100] transition-all duration-100 flex items-center gap-1"
-                 style="border-color: ${markerColor}30; color: ${markerColor};">
-              <span>${p.systemName} <span class="opacity-75 font-mono text-[8px]">(${p.epsg})</span></span>
+            <div class="absolute bottom-6 scale-0 group-hover:scale-100 bg-white/95 backdrop-blur-[2px] text-[10px] font-bold px-2 py-1 rounded shadow-md border whitespace-nowrap z-[2000] transition-all duration-100 flex items-center gap-1.5"
+                 style="border-color: ${markerColor}40; color: ${markerColor}; ${isHighlighted ? 'border-width: 2px;' : ''}">
+              <span class="w-1.5 h-1.5 rounded-full" style="background-color: ${markerColor}"></span>
+              <span>${p.systemName} ${isHighlighted ? '⭐ (Markerad)' : ''} <span class="opacity-75 font-mono text-[8px]">(${p.epsg})</span></span>
             </div>
-            <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-opacity-90 border-2 border-white shadow-xs flex items-center justify-center transition-transform hover:scale-120 duration-100" style="background-color: ${markerColor}">
-              <span class="h-1 w-1 rounded-full bg-white/70"></span>
+            
+            <!-- Pulse ring effect for highlighted system marker -->
+            ${pingEffect}
+
+            <span class="relative inline-flex rounded-full ${sizeClass} border-2 border-white shadow-sm flex items-center justify-center transition-transform hover:scale-125 duration-100" style="background-color: ${markerColor}">
+              <span class="h-1 w-1 rounded-full bg-white/80"></span>
             </span>
           </div>
         `,
         className: "custom-pin-small",
-        iconSize: [18, 18],
-        iconAnchor: [9, 9],
+        iconSize: [22, 22],
+        iconAnchor: [11, 11],
       });
 
       const marker = L.marker([p.lat, p.lon], { icon: customIcon })
@@ -276,6 +282,225 @@ export default function MapComponent({
       map.panTo(latlng, { animate: true, duration: 0.5 });
     }
   }, [highlightedSystemId, points]);
+
+  // Sync / render Swedish Municipalities as elegant interactive polygons or backup colored circle dots!
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    // Remove existing municipal layers
+    muniLayersRef.current.forEach((layer) => layer.remove());
+    muniLayersRef.current = [];
+    geoJsonGroupRef.current = null;
+
+    if (!showMunicipalities) return;
+
+    const layers: L.Layer[] = [];
+
+    if (muniGeoJson) {
+      // Create GeoJSON Layer with beautiful fills and hovers
+      const geoLayer = L.geoJSON(muniGeoJson, {
+        style: (feature) => {
+          const muniName = getFeatureMuniName(feature);
+          const localMuni = findLocalMunicipality(muniName);
+          const isSelectedMuni = localMuni && localMuni.name === selectedMunicipalityName;
+          const systemColor = localMuni ? getSystemColor(localMuni.projectionId) : "#64748b";
+
+          const hasHighlight = highlightedSystemId !== null;
+          const matchesHighlightedSystem = localMuni && localMuni.projectionId === highlightedSystemId;
+
+          let fillOpacity = 0.38;
+          let strokeOpacity = 0.65;
+          let strokeWidth = 0.8;
+          let strokeColor = "#ffffff";
+
+          if (isSelectedMuni) {
+            fillOpacity = 0.88;
+            strokeOpacity = 1.0;
+            strokeWidth = 3.5;
+            strokeColor = "#0f172a"; // extra strong dark border for selected
+          } else if (hasHighlight) {
+            if (matchesHighlightedSystem) {
+              fillOpacity = 0.65;
+              strokeOpacity = 0.85;
+              strokeWidth = 1.4;
+              strokeColor = "#ffffff";
+            } else {
+              fillOpacity = 0.20;
+              strokeOpacity = 0.35;
+              strokeWidth = 0.5;
+              strokeColor = "#ffffff";
+            }
+          } else {
+            fillOpacity = 0.38;
+            strokeOpacity = 0.65;
+            strokeWidth = 0.8;
+            strokeColor = "#ffffff";
+          }
+
+          return {
+            color: strokeColor,
+            weight: strokeWidth,
+            fillColor: systemColor,
+            fillOpacity: fillOpacity,
+            opacity: strokeOpacity,
+          };
+        },
+        onEachFeature: (feature, layer) => {
+          const muniName = getFeatureMuniName(feature);
+          const localMuni = findLocalMunicipality(muniName);
+
+          if (localMuni) {
+            const systemColor = getSystemColor(localMuni.projectionId);
+
+            // Bind Swedish tooltip
+            layer.bindTooltip(`
+              <div class="font-sans p-1 text-slate-900 leading-normal">
+                <div class="font-extrabold text-[12px] flex items-center gap-1.5">
+                  <span class="w-2 rounded-full h-2 inline-block border border-white" style="background-color: ${systemColor}"></span>
+                  ${localMuni.name}
+                </div>
+                <div class="text-[10px] text-slate-500 font-bold mt-0.5">${localMuni.county}</div>
+                <div class="text-[10px] text-blue-600 font-extrabold mt-1 font-sans">Nät: ${localMuni.projection}</div>
+                <p class="text-[9px] text-slate-400 font-mono mt-0.5">${localMuni.lat.toFixed(4)}° N, ${localMuni.lon.toFixed(4)}° E</p>
+                <div class="text-[9px] text-blue-750 font-extrabold mt-1 border-t border-slate-100 pt-1">
+                  Klicka för att välja kommun
+                </div>
+              </div>
+            `, { sticky: true, opacity: 0.98 });
+
+            layer.on({
+              mouseover: (e) => {
+                const ly = e.target;
+                const isSelected = localMuni.name === selectedMunicipalityName;
+                if (!isSelected) {
+                  ly.setStyle({
+                    fillOpacity: 0.75,
+                    opacity: 0.9,
+                    weight: 2.0,
+                    color: "#1e293b"
+                  });
+                }
+              },
+              mouseout: (e) => {
+                const ly = e.target;
+                const isSelected = localMuni.name === selectedMunicipalityName;
+                const matchesHighlightedSystem = localMuni && localMuni.projectionId === highlightedSystemId;
+                const hasHighlight = highlightedSystemId !== null;
+
+                if (!isSelected) {
+                  if (hasHighlight) {
+                    if (matchesHighlightedSystem) {
+                      ly.setStyle({
+                        fillOpacity: 0.65,
+                        opacity: 0.85,
+                        weight: 1.4,
+                        color: "#ffffff"
+                      });
+                    } else {
+                      ly.setStyle({
+                        fillOpacity: 0.20,
+                        opacity: 0.35,
+                        weight: 0.5,
+                        color: "#ffffff"
+                      });
+                    }
+                  } else {
+                    ly.setStyle({
+                      fillOpacity: 0.38,
+                      opacity: 0.65,
+                      weight: 0.8,
+                      color: "#ffffff"
+                    });
+                  }
+                }
+              },
+              click: (e) => {
+                if (onMunicipalityClick) {
+                  onMunicipalityClick(localMuni.name);
+                }
+                L.DomEvent.stopPropagation(e);
+              }
+            });
+          }
+        },
+      });
+
+      geoLayer.addTo(map);
+      layers.push(geoLayer);
+      geoJsonGroupRef.current = geoLayer;
+
+    } else {
+      // Fallback: draw beautiful circle markers for each municipality while GeoJSON is loading or unavailable
+      MUNICIPALITIES.forEach((m) => {
+        const isSelected = m.name === selectedMunicipalityName;
+        const systemColor = getSystemColor(m.projectionId);
+
+        const marker = L.circleMarker([m.lat, m.lon], {
+          radius: isSelected ? 8 : 4.5,
+          fillColor: systemColor,
+          color: "#ffffff",
+          weight: isSelected ? 3.0 : 1.0,
+          fillOpacity: isSelected ? 0.95 : 0.70,
+          opacity: 0.9,
+          pane: "markerPane"
+        });
+
+        marker.bindTooltip(`
+          <div class="font-sans p-1 text-slate-900 leading-normal">
+            <div class="font-extrabold text-[12px] flex items-center gap-1.5">
+              <span class="w-2 rounded-full h-2 inline-block border border-white" style="background-color: ${systemColor}"></span>
+              ${m.name}
+            </div>
+            <div class="text-[10px] text-slate-550 font-bold mt-0.5">${m.county}</div>
+            <div class="text-[10px] text-blue-600 font-extrabold mt-1">Nät: ${m.projection}</div>
+            <p class="text-[9px] text-slate-400 font-mono mt-0.5">${m.lat.toFixed(4)}° N, ${m.lon.toFixed(4)}° E</p>
+            <div class="text-[9px] text-blue-750 font-extrabold mt-1 border-t border-slate-100 pt-1 block">
+              Klicka för att ladda koordinater
+            </div>
+          </div>
+        `, { sticky: true, opacity: 0.98 });
+
+        marker.on("click", (e) => {
+          if (onMunicipalityClick) {
+            onMunicipalityClick(m.name);
+          }
+          L.DomEvent.stopPropagation(e);
+        });
+
+        marker.addTo(map);
+        layers.push(marker);
+      });
+    }
+
+    muniLayersRef.current = layers;
+
+    return () => {
+      layers.forEach((layer) => layer.remove());
+    };
+  }, [showMunicipalities, selectedMunicipalityName, muniGeoJson, onMunicipalityClick, highlightedSystemId]);
+
+  // Proactively fly to and auto-bounds highlight the selected municipality polygon
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const geoJsonGroup = geoJsonGroupRef.current;
+    if (!map || !geoJsonGroup || !selectedMunicipalityName) return;
+
+    geoJsonGroup.eachLayer((layer: any) => {
+      if (layer.feature) {
+        const muniName = getFeatureMuniName(layer.feature);
+        const localMuni = findLocalMunicipality(muniName);
+        if (localMuni && localMuni.name === selectedMunicipalityName) {
+          if (typeof layer.getBounds === "function") {
+            const bounds = layer.getBounds();
+            if (bounds.isValid()) {
+              map.fitBounds(bounds, { animate: true, maxZoom: 10, duration: 0.8 });
+            }
+          }
+        }
+      }
+    });
+  }, [selectedMunicipalityName, muniGeoJson]);
 
   // Preset quick navigation to Sweden regions
   const zoomToArea = (area: "SVERIGE" | "STHLM" | "GBG" | "MALMO" | "UMEA") => {
@@ -318,17 +543,17 @@ export default function MapComponent({
       {/* Top Map Shortcuts Bar */}
       <div className="absolute top-3 left-3 z-[1000] flex flex-wrap gap-1.5 max-w-[calc(100%-60px)]">
         <div className="bg-white/95 backdrop-blur-md p-1.5 rounded-xl shadow-md border border-slate-100 flex items-center gap-1.5 text-xs font-sans hover:border-slate-200 transition-all duration-150">
-          {/* SWEREF local zones toggler button */}
+          {/* Municipalities toggler button */}
           <button
-            onClick={() => setShowZones(!showZones)}
+            onClick={() => setShowMunicipalities(!showMunicipalities)}
             className={`px-2 py-1 rounded-lg transition font-semibold text-[11px] flex items-center gap-1.5 active:scale-95 duration-100 cursor-pointer ${
-              showZones
-                ? "bg-indigo-50 text-indigo-600 border border-indigo-200/50"
+              showMunicipalities
+                ? "bg-emerald-50 text-emerald-600 border border-emerald-200/50"
                 : "hover:bg-slate-100 text-slate-600 border border-transparent"
             }`}
           >
-            <span className={`w-1.5 h-1.5 rounded-full ${showZones ? "bg-indigo-600 animate-pulse" : "bg-slate-400"}`}></span>
-            Visa SWEREF-zoner
+            <span className={`w-1.5 h-1.5 rounded-full ${showMunicipalities ? "bg-emerald-600 animate-pulse" : "bg-slate-400"}`}></span>
+            Visa kommuner
           </button>
 
           {/* Info card toggler button */}
