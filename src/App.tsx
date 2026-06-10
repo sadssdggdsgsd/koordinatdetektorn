@@ -339,35 +339,6 @@ export default function App() {
             <p className="text-[11px] text-slate-500 font-medium">Identifiera, konvertera och verifiera svenska kartprojektioner</p>
           </div>
         </div>
-
-        {/* Flat presets bar */}
-        <div className="flex items-center gap-1 bg-slate-100/80 p-0.5 rounded-lg border border-slate-200/40" id="presets-container">
-          <span className="text-[10px] font-bold text-slate-400 px-2 uppercase">Testa:</span>
-          <button
-            onClick={() => applyPreset("STHLM_LOCAL")}
-            className="px-2 py-1 rounded hover:bg-white text-[11px] font-medium text-slate-700 cursor-pointer"
-          >
-            Lokalt (18 00)
-          </button>
-          <button
-            onClick={() => applyPreset("STHLM_TM")}
-            className="px-2 py-1 rounded hover:bg-white text-[11px] font-medium text-slate-700 cursor-pointer"
-          >
-            Nationellt (TM)
-          </button>
-          <button
-            onClick={() => applyPreset("STHLM_RT90")}
-            className="px-2 py-1 rounded hover:bg-white text-[11px] font-medium text-slate-700 cursor-pointer"
-          >
-            Gamla RT90
-          </button>
-          <button
-            onClick={() => applyPreset("GPS")}
-            className="px-2 py-1 rounded hover:bg-white text-[11px] font-medium text-slate-700 cursor-pointer"
-          >
-            WGS84 GPS
-          </button>
-        </div>
       </header>
 
       {/* 2. MINIMAL INPUT CONSOLE */}
@@ -773,17 +744,7 @@ export default function App() {
                 </div>
               </div>
             </div>
-          ) : (
-            <div className="bg-white px-3.5 py-2 rounded-xl border border-slate-150/60 shadow-2xs text-[10px] text-slate-400 font-medium flex items-center justify-between">
-              <span>Tips: Klicka på valfri plats på kartan för att få lokala nät-koordinater direkt.</span>
-              <button
-                onClick={() => handleMapClick(59.3293, 18.0686)}
-                className="hover:text-slate-700 text-[10px] font-extrabold text-blue-600 tracking-wider uppercase cursor-pointer"
-              >
-                Stockholm test
-              </button>
-            </div>
-          )}
+          ) : null}
         </section>
       </main>
     </div>

@@ -78,7 +78,9 @@ export const getSystemColor = (systemId: string): string => {
 
 export const getFeatureMuniName = (feature: any): string => {
   if (!feature || !feature.properties) return "";
-  return feature.properties.knnamn || 
+  return feature.properties.kom_namn || 
+         feature.properties.KOM_NAMN || 
+         feature.properties.knnamn || 
          feature.properties.name || 
          feature.properties.kommunnamn || 
          feature.properties.KOMMUNNAMN || 
@@ -535,9 +537,6 @@ export default function MapComponent({
     mapInstanceRef.current.setView(targetCoords, zoomLevel, { animate: true });
   };
 
-  const highlightedPoint = points.find((p) => p.systemId === highlightedSystemId);
-  const highlightedSystemDetails = COORDINATE_SYSTEMS.find((s) => s.id === highlightedSystemId);
-
   return (
     <div className="relative w-full h-full rounded-2xl overflow-hidden border border-slate-200/60 shadow-xs flex flex-col" id="map-parent">
       {/* Top Map Shortcuts Bar */}
@@ -555,25 +554,6 @@ export default function MapComponent({
             <span className={`w-1.5 h-1.5 rounded-full ${showMunicipalities ? "bg-emerald-600 animate-pulse" : "bg-slate-400"}`}></span>
             Visa kommuner
           </button>
-
-          {/* Info card toggler button */}
-          {highlightedPoint && (
-            <>
-              <div className="h-4 w-px bg-slate-200 mx-1"></div>
-              <button
-                onClick={() => setShowInfoBox(!showInfoBox)}
-                className={`px-2 py-1 rounded-lg transition font-semibold text-[11px] flex items-center gap-1.5 active:scale-95 duration-100 cursor-pointer ${
-                  showInfoBox
-                    ? "bg-blue-50 text-blue-600 border border-blue-200/50"
-                    : "hover:bg-slate-100 text-slate-600 border border-transparent"
-                }`}
-                id="map-btn-toggle-infobox"
-              >
-                <span className={`w-1.5 h-1.5 rounded-full ${showInfoBox ? "bg-blue-600 animate-pulse" : "bg-slate-400"}`}></span>
-                {showInfoBox ? "Dölj inforuta" : "Visa inforuta"}
-              </button>
-            </>
-          )}
         </div>
       </div>
 
@@ -583,109 +563,8 @@ export default function MapComponent({
       {/* Map helper notice */}
       <div className="absolute bottom-3 left-3 z-[1000] bg-slate-900/90 backdrop-blur-md px-3 py-1.5 rounded-lg text-[10px] text-slate-300 shadow-sm border border-slate-800 flex items-center gap-1.5 pointer-events-none">
         <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
-        <span>Tips: Klicka på zonerna eller kartan för att se koordinater</span>
+        <span>Tips: Klicka på kommunerna eller kartan för att se koordinater</span>
       </div>
-
-      {/* Floating Detailed Point Information card */}
-      {showInfoBox && highlightedPoint && (
-        <div 
-          className="absolute bottom-3 right-3 z-[1000] bg-white/95 backdrop-blur-md p-4 rounded-xl shadow-xl border border-slate-200 w-80 flex flex-col gap-2.5 animate-fade-in"
-          id="highlighted-point-infobox"
-        >
-          <div className="flex items-start justify-between border-b border-slate-100 pb-2">
-            <div>
-              <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                <span 
-                  className="w-2.5 h-2.5 rounded-full inline-block border border-white shadow-xs" 
-                  style={{ backgroundColor: getSystemColor(highlightedPoint.systemId) }} 
-                />
-                {highlightedPoint.systemName}
-              </div>
-              <div className="text-[9px] text-slate-400 font-mono font-semibold uppercase tracking-wider mt-0.5">
-                {highlightedPoint.epsg}
-              </div>
-            </div>
-            <button
-              onClick={() => setShowInfoBox(false)}
-              className="text-slate-400 hover:text-slate-650 p-1 hover:bg-slate-100 rounded-lg transition cursor-pointer"
-              title="Dölj"
-              id="close-infobox-btn"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div className="flex flex-col gap-2 text-[11px] font-sans text-slate-600">
-            <div className="grid grid-cols-2 gap-1.5 bg-slate-50 p-2 rounded-lg border border-slate-200/40 font-mono">
-              <div>
-                <span className="text-[9px] text-slate-400 font-sans block font-semibold">N (Northing)</span>
-                <span className="text-xs font-bold text-slate-900">
-                  {highlightedPoint.type === "WGS84" 
-                    ? `${highlightedPoint.lat.toFixed(6)}°` 
-                    : `${Math.round(highlightedPoint.n).toLocaleString("sv-SE")} m`}
-                </span>
-              </div>
-              <div>
-                <span className="text-[9px] text-slate-400 font-sans block font-semibold">E (Easting)</span>
-                <span className="text-xs font-bold text-slate-900">
-                  {highlightedPoint.type === "WGS84" 
-                    ? `${highlightedPoint.lon.toFixed(6)}°` 
-                    : `${Math.round(highlightedPoint.e).toLocaleString("sv-SE")} m`}
-                </span>
-              </div>
-            </div>
-
-            {highlightedPoint.type !== "WGS84" && (
-              <div className="text-[10px] text-slate-500 font-sans leading-relaxed border-b border-slate-100 pb-2">
-                <span className="font-bold text-slate-450 uppercase text-[8px] tracking-wide block mb-1">Motsvarande WGS 84 (GPS)</span>
-                <span className="font-mono text-slate-850 font-semibold">
-                  Lat: {highlightedPoint.lat.toFixed(6)}° N<br />
-                  Lon: {highlightedPoint.lon.toFixed(6)}° E
-                </span>
-              </div>
-            )}
-
-            {/* Projection Parameters */}
-            {highlightedSystemDetails && (
-              <div className="text-[10px] space-y-1">
-                <span className="font-bold text-slate-450 uppercase text-[8px] tracking-wide block mb-1">Projektionsparametrar (Konform)</span>
-                {highlightedSystemDetails.meridian !== undefined && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Centralmeridian:</span>
-                    <span className="font-mono text-slate-700 font-semibold">{highlightedSystemDetails.meridian}° Ö</span>
-                  </div>
-                )}
-                {highlightedSystemDetails.scale !== undefined && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Skalreduktion k₀:</span>
-                    <span className="font-mono text-slate-700 font-semibold">{highlightedSystemDetails.scale}</span>
-                  </div>
-                )}
-                {highlightedSystemDetails.falseNorthing !== undefined && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">False Northing N₀:</span>
-                    <span className="font-mono text-slate-700 font-semibold">{highlightedSystemDetails.falseNorthing.toLocaleString("sv-SE")} m</span>
-                  </div>
-                )}
-                {highlightedSystemDetails.falseEasting !== undefined && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">False Easting E₀:</span>
-                    <span className="font-mono text-slate-700 font-semibold">{highlightedSystemDetails.falseEasting.toLocaleString("sv-SE")} m</span>
-                  </div>
-                )}
-                <div className="flex justify-between border-t border-slate-150 pt-1 mt-1">
-                  <span className="text-slate-400">Referensellipsoid:</span>
-                  <span className="font-mono text-slate-705 uppercase font-semibold">{highlightedSystemDetails.ellipsoid}</span>
-                </div>
-                
-                <p className="text-[9px] text-slate-400 mt-2 leading-relaxed bg-slate-50/50 p-1.5 rounded border border-slate-100 font-medium">
-                  {highlightedSystemDetails.description}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
