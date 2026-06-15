@@ -149,12 +149,13 @@ export default function MapComponent({
     // Reposition zoom control nicely
     L.control.zoom({ position: "topright" }).addTo(map);
 
-    // Clean, high-contrast, beautiful cartography tiles (OSM Voyager)
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-      subdomains: "abcd",
-      maxZoom: 20,
+    // Swedish Lantmäteriet WMS - topowebbkartan_nedtonad background
+    L.tileLayer.wms("https://minkarta.lantmateriet.se/map/topowebb/", {
+      layers: "topowebbkartan_nedtonad",
+      version: "1.1.1",
+      transparent: false,
+      format: "image/png",
+      attribution: "&copy; Lantmäteriet"
     }).addTo(map);
 
     // Register click event on map
@@ -265,13 +266,18 @@ export default function MapComponent({
       markersRef.current[p.systemId] = marker;
     });
 
-    // Auto-zoom map bounds to fit points if we have active points in Sweden
-    if (pointsToFit.length > 0) {
+    // Auto-zoom map bounds to fit points if we have active points in Sweden,
+    // but only if we are not currently focusing on a highlighted system or a specific municipality.
+    // This prevents conflicting zoom-out sequences.
+    if (pointsToFit.length > 0 && !highlightedSystemId && !selectedMunicipalityName) {
       const latLgList = pointsToFit.map((p) => L.latLng(p.lat, p.lon));
       const bounds = L.latLngBounds(latLgList);
       
-      // Pad bounds slightly
-      map.fitBounds(bounds.pad(0.12), { animate: true, duration: 0.8, maxZoom: 14 });
+      const currentZoom = map.getZoom() || 5;
+      const targetBoundsZoom = Math.min(map.getBoundsZoom(bounds.pad(0.12)), 14);
+      // Strictly prevent automatic zooming out
+      const finalZoom = targetBoundsZoom > currentZoom ? targetBoundsZoom : currentZoom;
+      map.setView(bounds.getCenter(), finalZoom, { animate: true, duration: 0.8 });
     }
   }, [points, highlightedSystemId]);
 
@@ -311,31 +317,31 @@ export default function MapComponent({
           const hasHighlight = highlightedSystemId !== null;
           const matchesHighlightedSystem = localMuni && localMuni.projectionId === highlightedSystemId;
 
-          let fillOpacity = 0.38;
-          let strokeOpacity = 0.65;
+          let fillOpacity = 0.18;
+          let strokeOpacity = 0.60;
           let strokeWidth = 0.8;
           let strokeColor = "#ffffff";
 
           if (isSelectedMuni) {
-            fillOpacity = 0.88;
+            fillOpacity = 0.45;
             strokeOpacity = 1.0;
             strokeWidth = 3.5;
             strokeColor = "#0f172a"; // extra strong dark border for selected
           } else if (hasHighlight) {
             if (matchesHighlightedSystem) {
-              fillOpacity = 0.65;
-              strokeOpacity = 0.85;
+              fillOpacity = 0.30;
+              strokeOpacity = 0.80;
               strokeWidth = 1.4;
               strokeColor = "#ffffff";
             } else {
-              fillOpacity = 0.20;
-              strokeOpacity = 0.35;
+              fillOpacity = 0.05;
+              strokeOpacity = 0.25;
               strokeWidth = 0.5;
               strokeColor = "#ffffff";
             }
           } else {
-            fillOpacity = 0.38;
-            strokeOpacity = 0.65;
+            fillOpacity = 0.18;
+            strokeOpacity = 0.60;
             strokeWidth = 0.8;
             strokeColor = "#ffffff";
           }
@@ -353,23 +359,14 @@ export default function MapComponent({
           const localMuni = findLocalMunicipality(muniName);
 
           if (localMuni) {
-            const systemColor = getSystemColor(localMuni.projectionId);
-
             // Bind Swedish tooltip
             layer.bindTooltip(`
-              <div class="font-sans p-1 text-slate-900 leading-normal">
-                <div class="font-extrabold text-[12px] flex items-center gap-1.5">
-                  <span class="w-2 rounded-full h-2 inline-block border border-white" style="background-color: ${systemColor}"></span>
-                  ${localMuni.name}
-                </div>
-                <div class="text-[10px] text-slate-500 font-bold mt-0.5">${localMuni.county}</div>
-                <div class="text-[10px] text-blue-600 font-extrabold mt-1 font-sans">Nät: ${localMuni.projection}</div>
-                <p class="text-[9px] text-slate-400 font-mono mt-0.5">${localMuni.lat.toFixed(4)}° N, ${localMuni.lon.toFixed(4)}° E</p>
-                <div class="text-[9px] text-blue-750 font-extrabold mt-1 border-t border-slate-100 pt-1">
-                  Klicka för att välja kommun
-                </div>
+              <div class="font-sans text-slate-850 text-[11px] leading-tight flex flex-col gap-0.5">
+                <div>Kommun: <span class="font-bold text-slate-950">${localMuni.name}</span></div>
+                <div>Län: <span class="font-bold text-slate-950">${localMuni.county}</span></div>
+                <div>Lokal projektion: <span class="font-bold text-slate-950">${localMuni.projection}</span></div>
               </div>
-            `, { sticky: true, opacity: 0.98 });
+            `, { sticky: true, className: "minimalist-tooltip" });
 
             layer.on({
               mouseover: (e) => {
@@ -377,7 +374,7 @@ export default function MapComponent({
                 const isSelected = localMuni.name === selectedMunicipalityName;
                 if (!isSelected) {
                   ly.setStyle({
-                    fillOpacity: 0.75,
+                    fillOpacity: 0.40,
                     opacity: 0.9,
                     weight: 2.0,
                     color: "#1e293b"
@@ -394,23 +391,23 @@ export default function MapComponent({
                   if (hasHighlight) {
                     if (matchesHighlightedSystem) {
                       ly.setStyle({
-                        fillOpacity: 0.65,
-                        opacity: 0.85,
+                        fillOpacity: 0.30,
+                        opacity: 0.80,
                         weight: 1.4,
                         color: "#ffffff"
                       });
                     } else {
                       ly.setStyle({
-                        fillOpacity: 0.20,
-                        opacity: 0.35,
+                        fillOpacity: 0.05,
+                        opacity: 0.25,
                         weight: 0.5,
                         color: "#ffffff"
                       });
                     }
                   } else {
                     ly.setStyle({
-                      fillOpacity: 0.38,
-                      opacity: 0.65,
+                      fillOpacity: 0.18,
+                      opacity: 0.60,
                       weight: 0.8,
                       color: "#ffffff"
                     });
@@ -449,19 +446,12 @@ export default function MapComponent({
         });
 
         marker.bindTooltip(`
-          <div class="font-sans p-1 text-slate-900 leading-normal">
-            <div class="font-extrabold text-[12px] flex items-center gap-1.5">
-              <span class="w-2 rounded-full h-2 inline-block border border-white" style="background-color: ${systemColor}"></span>
-              ${m.name}
-            </div>
-            <div class="text-[10px] text-slate-550 font-bold mt-0.5">${m.county}</div>
-            <div class="text-[10px] text-blue-600 font-extrabold mt-1">Nät: ${m.projection}</div>
-            <p class="text-[9px] text-slate-400 font-mono mt-0.5">${m.lat.toFixed(4)}° N, ${m.lon.toFixed(4)}° E</p>
-            <div class="text-[9px] text-blue-750 font-extrabold mt-1 border-t border-slate-100 pt-1 block">
-              Klicka för att ladda koordinater
-            </div>
+          <div class="font-sans text-slate-850 text-[11px] leading-tight flex flex-col gap-0.5">
+            <div>Kommun: <span class="font-bold text-slate-950">${m.name}</span></div>
+            <div>Län: <span class="font-bold text-slate-950">${m.county}</span></div>
+            <div>Lokal projektion: <span class="font-bold text-slate-950">${m.projection}</span></div>
           </div>
-        `, { sticky: true, opacity: 0.98 });
+        `, { sticky: true, className: "minimalist-tooltip" });
 
         marker.on("click", (e) => {
           if (onMunicipalityClick) {
@@ -496,7 +486,11 @@ export default function MapComponent({
           if (typeof layer.getBounds === "function") {
             const bounds = layer.getBounds();
             if (bounds.isValid()) {
-              map.fitBounds(bounds, { animate: true, maxZoom: 10, duration: 0.8 });
+              const currentZoom = map.getZoom();
+              const targetBoundsZoom = Math.min(map.getBoundsZoom(bounds), 10);
+              // Do not zoom out if currently zoomed in deeper
+              const finalZoom = currentZoom > targetBoundsZoom ? currentZoom : targetBoundsZoom;
+              map.setView(bounds.getCenter(), finalZoom, { animate: true, duration: 0.8 });
             }
           }
         }

@@ -27,3 +27,20 @@
   background: rgba(156, 163, 175, 0.5);
 }
 
+/* Custom minimalist transparent Leaflet tooltip */
+.minimalist-tooltip {
+  background: rgba(255, 255, 255, 0.65) !important;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.4) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05) !important;
+  border-radius: 6px !important;
+  padding: 4px 8px !important;
+}
+
+.minimalist-tooltip::before {
+  border-right-color: rgba(255, 255, 255, 0.65) !important;
+  border-left-color: rgba(255, 255, 255, 0.65) !important;
+}
+
+
