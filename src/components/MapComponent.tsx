@@ -26,7 +26,7 @@ interface MapComponentProps {
   highlightedSystemId: string | null;
   onMapClick: (lat: number, lon: number) => void;
   onMarkerClick: (systemId: string) => void;
-  onMunicipalityClick?: (name: string) => void;
+  onMunicipalityClick?: (name: string, clickedLat?: number, clickedLon?: number) => void;
   selectedMunicipalityName?: string | null;
 }
 
@@ -223,9 +223,9 @@ export default function MapComponent({
           opacityStyle = "opacity: 1.0; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.15));";
           zIndexStyle = "z-index: 1500; font-weight: 800;";
         } else {
-          sizeClass = "h-2.5 w-2.5 opacity-60";
-          opacityStyle = "opacity: 0.28;"; // Make points not matching marked system much weaker
-          zIndexStyle = "z-index: 500;";
+          sizeClass = "h-3.5 w-3.5 opacity-90";
+          opacityStyle = "opacity: 0.68;"; // Make points not matching marked system much more visible
+          zIndexStyle = "z-index: 800;";
         }
       } else {
         // Normal state when no projection is explicitly highlighted
@@ -307,7 +307,8 @@ export default function MapComponent({
 
     if (muniGeoJson) {
       // Create GeoJSON Layer with beautiful fills and hovers
-      const geoLayer = L.geoJSON(muniGeoJson, {
+      let geoLayer: L.GeoJSON | null = null;
+      geoLayer = L.geoJSON(muniGeoJson, {
         style: (feature) => {
           const muniName = getFeatureMuniName(feature);
           const localMuni = findLocalMunicipality(muniName);
@@ -323,10 +324,10 @@ export default function MapComponent({
           let strokeColor = "#ffffff";
 
           if (isSelectedMuni) {
-            fillOpacity = 0.45;
-            strokeOpacity = 1.0;
-            strokeWidth = 3.5;
-            strokeColor = "#0f172a"; // extra strong dark border for selected
+            fillOpacity = 0.28;
+            strokeOpacity = 0.80;
+            strokeWidth = 2.0;
+            strokeColor = "#334155"; // softer, less heavy dark border
           } else if (hasHighlight) {
             if (matchesHighlightedSystem) {
               fillOpacity = 0.30;
@@ -334,9 +335,9 @@ export default function MapComponent({
               strokeWidth = 1.4;
               strokeColor = "#ffffff";
             } else {
-              fillOpacity = 0.05;
-              strokeOpacity = 0.25;
-              strokeWidth = 0.5;
+              fillOpacity = 0.12;
+              strokeOpacity = 0.45;
+              strokeWidth = 0.6;
               strokeColor = "#ffffff";
             }
           } else {
@@ -382,41 +383,13 @@ export default function MapComponent({
                 }
               },
               mouseout: (e) => {
-                const ly = e.target;
-                const isSelected = localMuni.name === selectedMunicipalityName;
-                const matchesHighlightedSystem = localMuni && localMuni.projectionId === highlightedSystemId;
-                const hasHighlight = highlightedSystemId !== null;
-
-                if (!isSelected) {
-                  if (hasHighlight) {
-                    if (matchesHighlightedSystem) {
-                      ly.setStyle({
-                        fillOpacity: 0.30,
-                        opacity: 0.80,
-                        weight: 1.4,
-                        color: "#ffffff"
-                      });
-                    } else {
-                      ly.setStyle({
-                        fillOpacity: 0.05,
-                        opacity: 0.25,
-                        weight: 0.5,
-                        color: "#ffffff"
-                      });
-                    }
-                  } else {
-                    ly.setStyle({
-                      fillOpacity: 0.18,
-                      opacity: 0.60,
-                      weight: 0.8,
-                      color: "#ffffff"
-                    });
-                  }
+                if (geoLayer) {
+                  geoLayer.resetStyle(e.target);
                 }
               },
               click: (e) => {
                 if (onMunicipalityClick) {
-                  onMunicipalityClick(localMuni.name);
+                  onMunicipalityClick(localMuni.name, e.latlng.lat, e.latlng.lng);
                 }
                 L.DomEvent.stopPropagation(e);
               }
@@ -436,11 +409,11 @@ export default function MapComponent({
         const systemColor = getSystemColor(m.projectionId);
 
         const marker = L.circleMarker([m.lat, m.lon], {
-          radius: isSelected ? 8 : 4.5,
+          radius: isSelected ? 6.5 : 4.5,
           fillColor: systemColor,
           color: "#ffffff",
-          weight: isSelected ? 3.0 : 1.0,
-          fillOpacity: isSelected ? 0.95 : 0.70,
+          weight: isSelected ? 2.0 : 1.0,
+          fillOpacity: isSelected ? 0.80 : 0.70,
           opacity: 0.9,
           pane: "markerPane"
         });
@@ -455,7 +428,7 @@ export default function MapComponent({
 
         marker.on("click", (e) => {
           if (onMunicipalityClick) {
-            onMunicipalityClick(m.name);
+            onMunicipalityClick(m.name, e.latlng.lat, e.latlng.lng);
           }
           L.DomEvent.stopPropagation(e);
         });

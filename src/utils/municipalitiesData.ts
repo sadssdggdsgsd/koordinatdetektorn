@@ -247,7 +247,7 @@ Lycksele;Västerbottens län;SWEREF 99 18 45
 Lysekil;Västra Götalands län;SWEREF 99 12 00
 Malmö;Skåne län;SWEREF 99 13 30
 Malung-Sälen;Dalarnas län;SWEREF 99 13 30
-Malå;Västerbottens län;SWEREF 99 15 45
+Malå;Västerbottens län;SWEREF 99 18 45
 Mariestad;Västra Götalands län;SWEREF 99 13 30
 Mark;Västra Götalands län;SWEREF 99 12 00
 Markaryd;Kronobergs län;SWEREF 99 13 30
@@ -259,7 +259,7 @@ Mullsjö;Jönköpings län;SWEREF 99 13 30
 Munkedal;Västra Götalands län;SWEREF 99 12 00
 Munkfors;Värmlands län;SWEREF 99 13 30
 Mölndal;Västra Götalands län;SWEREF 99 12 00
-Mönsterås;Kalmar län;SWEREF 99 13 30
+Mönsterås;Kalmar län;SWEREF 99 16 30
 Mörbylånga;Kalmar län;SWEREF 99 16 30
 Nacka;Stockholms län;SWEREF 99 18 00
 Nora;Örebro län;SWEREF 99 15 00
